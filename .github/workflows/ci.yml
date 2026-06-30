@@ -1,0 +1,29 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build-test:
+    name: build + test (Linux)
+    # Linux-only: raylib-zig transitively pulls hexops/xcode-frameworks via
+    # git+https, which Zig's fetcher can't resolve on the macos runner.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - name: Install raylib system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxinerama-dev libxi-dev libxext-dev libxfixes-dev \
+            libwayland-dev libxkbcommon-dev libasound2-dev libsdl2-dev
+      - name: Build + test
+        run: zig build test
