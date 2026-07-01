@@ -51,5 +51,10 @@ pub fn main() !void {
     g.setScreenHeight(@as(f32, @floatFromInt(screen_h)));
     g.getCamera().setPosition(0, @as(f32, @floatFromInt(screen_h)));
 
-{{preview_setup}}{{setup_code}}    emscripten_set_main_loop(&gameFrame, @intCast(target_fps), 1);
+    // Pass fps=0 so emscripten drives the loop via `requestAnimationFrame`
+    // (vsync-aligned, browser-friendly) instead of `setTimeout` — a non-zero
+    // fps triggers the browser's "use 0 for the frame rate" warning
+    // (labelle-bgfx#14). Frame timing here comes from `window.getFrameTime()`,
+    // so this does not affect the game's dt.
+{{preview_setup}}{{setup_code}}    emscripten_set_main_loop(&gameFrame, 0, 1);
 }
