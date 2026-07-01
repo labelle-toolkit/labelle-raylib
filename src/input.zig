@@ -1,4 +1,10 @@
 /// Raylib input backend — satisfies the engine InputInterface(Impl) contract.
+// Contract-version tags (labelle-assembler#453 item 1). The assembler emits
+// directional `@compileError` version asserts in the generated game's main.zig
+// comparing these against labelle-core's `*_CONTRACT_VERSION` consts. v1 is the
+// initial revision of each contract.
+pub const targets_input_contract: u32 = 1;
+
 const std = @import("std");
 const builtin = @import("builtin");
 const rl = @import("raylib");

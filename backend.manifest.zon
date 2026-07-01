@@ -21,4 +21,40 @@
         .backend_dep = .{ "gamepad_enabled", "gamepad_hidapi" },
         .link = .{},
     },
+
+    // Canonical provider identity (#453). raylib is an official provider, so it
+    // lives under the reserved `labelle.` namespace. The enum tag `.raylib` is a
+    // shorthand for exactly this id — `validateProviderIdentity` drift-checks it.
+    .id = "labelle.raylib",
+
+    // Declared capabilities (#453) — what raylib ACTUALLY supports.
+    //   - `.screenshots`         — `window.takeScreenshot` (raylib `TakeScreenshot`).
+    //   - `.compressed_textures` — `gfx.isCompressed`/`gfx.uploadCompressed` upload
+    //                              ASTC blocks verbatim via `glCompressedTexImage2D`
+    //                              (astc.zig container parse, #340).
+    //   - `.fonts`               — `gfx.decodeFont`/`uploadFontAtlas` (stb_truetype
+    //                              bake + GPU atlas upload).
+    //   - `.gamepad_polling`     — `input.pollGamepadEvents`/`describeGamepads`,
+    //                              backed on desktop by the shared SDL gamepad source.
+    //   - `.wasm`                — raylib ships a wasm build (templates/wasm.txt,
+    //                              emsdk dep, the enum `link_raylib_wasm` path).
+    //   - `.audio_ogg`           — `audio.decodeAudio` decodes OGG through the shared
+    //                              `labelle-audio-decode` module (stb_vorbis, #391).
+    //                              (raudio's own OGG decoder is disabled to avoid a
+    //                              duplicate-symbol clash, but the contract decode
+    //                              path still handles OGG.)
+    // NOT declared:
+    //   - `.raw_gui_adapter` — raylib ships no in-backend imgui adapter.
+    //   - `.android` / `.ios` — no mobile templates; sokol is the only mobile path.
+    //   - `.surface_loss` — desktop/wasm only; no mobile GPU surface lifecycle.
+    //   - `.headless` — raylib always creates a window (the true no-window path is
+    //     the separate `null` backend).
+    .capabilities = .{
+        .screenshots,
+        .compressed_textures,
+        .fonts,
+        .gamepad_polling,
+        .wasm,
+        .audio_ogg,
+    },
 }
