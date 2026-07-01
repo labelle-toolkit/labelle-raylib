@@ -17,6 +17,13 @@
 /// from the catalog tears down the same raylib `Sound` that a legacy
 /// `playSound(id)` would see. Slot 0 is reserved as "no sound" for
 /// both — matches the engine contract that treats id 0 as invalid.
+// Contract-version tags (labelle-assembler#453 item 1). The assembler emits
+// directional `@compileError` version asserts in the generated game's main.zig
+// comparing these against labelle-core's `*_CONTRACT_VERSION` consts. v1 is the
+// initial revision of each contract.
+pub const targets_audio_playback_contract: u32 = 1;
+pub const targets_audio_loader_contract: u32 = 1;
+
 const std = @import("std");
 const rl = @import("raylib");
 const slot_alloc = @import("slot_alloc.zig");
