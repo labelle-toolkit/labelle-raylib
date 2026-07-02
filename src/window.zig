@@ -29,7 +29,10 @@ pub fn closeWindow() void {
     rl.closeWindow();
 }
 
-pub fn windowShouldClose() bool {
+/// Whether the run loop should end — the latched programmatic quit OR raylib's
+/// own window-close signal. Its presence marks raylib as a loop-model backend
+/// (`Window(Impl).ownsLoop()`).
+pub fn shouldQuit() bool {
     return quit_requested or rl.windowShouldClose();
 }
 
@@ -52,25 +55,13 @@ pub fn setTargetFPS(fps: i32) void {
     rl.setTargetFPS(fps);
 }
 
-pub fn getFrameTime() f32 {
-    return rl.getFrameTime();
-}
-
-pub fn getScreenWidth() i32 {
-    return rl.getScreenWidth();
-}
-
-pub fn getScreenHeight() i32 {
-    return rl.getScreenHeight();
-}
-
 // ── Canonical window contract (labelle-core/src/window_contract.zig) ──────
 // The uniform window surface the pluggable-backends contract standardizes on
-// (labelle-assembler#386). raylib already exposes these values under its legacy
-// `getScreenWidth`-style names (kept — the generated raylib run-loop templates
-// still call them); the decls below are the canonical aliases so raylib
-// satisfies `core.assertWindow`. Renaming the templates to call these instead
-// (so backends can share one run-loop template) is a separate epic slice.
+// (labelle-assembler#386) — the raylib backend's only window surface. Bodies
+// wrap raylib's upstream C bindings (`rl.*`). raylib is a *loop-style* backend
+// (it owns `while (!shouldQuit())`), so it declares `shouldQuit`. NOTE: the
+// render contract's `getScreenWidth`/`getScreenHeight` live in gfx.zig — the
+// window surface exposes them as `width`/`height`.
 var quit_requested: bool = false;
 
 /// Current framebuffer width.
@@ -86,17 +77,17 @@ pub fn frameDuration() f64 {
     return @floatCast(rl.getFrameTime());
 }
 /// Ask the window to end the run loop. raylib has no native programmatic close,
-/// so latch a flag that `windowShouldClose` ORs in (no behavior change unless
-/// a script/engine calls this).
+/// so latch a flag that `shouldQuit` ORs in (no behavior change unless a
+/// script/engine calls this).
 pub fn requestQuit() void {
     quit_requested = true;
 }
 
-pub fn beginDrawing() void {
+pub fn beginFrame() void {
     rl.beginDrawing();
 }
 
-pub fn endDrawing() void {
+pub fn endFrame() void {
     rl.endDrawing();
 }
 
@@ -305,8 +296,8 @@ pub const preview_pbo = struct {
         allocator_set = true;
     }
 
-    /// Per-frame readback. Should be called between raylib's
-    /// `endDrawing` and the swap (or wherever the swapchain is still
+    /// Per-frame readback. Should be called between the backend's
+    /// `endFrame` and the swap (or wherever the swapchain is still
     /// readable). No-op if the editor hasn't accepted the stream yet.
     pub fn frame() void {
         const vtable = vt orelse return;
