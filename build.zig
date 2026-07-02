@@ -277,13 +277,31 @@ pub fn build(b: *std.Build) void {
     // `zig build -Dtarget=wasm32-emscripten test-host` still builds
     // and runs natively rather than trying to execute a wasm binary.
     // Mirror the same explicit host_target already used by slot_alloc_tests.
+    // Host-target raylib + labelle-core instances for the host-native test
+    // modules below. The main `raylib_mod`/`raylib_artifact` (and `core_mod`)
+    // are resolved for the REQUESTED `target`; the host test binaries are pinned
+    // to `host_target`, and a Compile can't mix a native test executable with a
+    // cross-target raylib module/static library (gemini/#502 review). Resolving
+    // raylib + core for `host_target` keeps every host module internally
+    // consistent, which also makes the default-`test`-step contract_check build
+    // + run under `-Dtarget=…`. On a native build (host == target) b.dependency
+    // dedupes these against the target instances, so there is no double compile.
+    const raylib_host_dep = b.dependency("raylib-zig", .{
+        .target = host_target,
+        .optimize = optimize,
+        .config = @as([]const u8, "-DSUPPORT_FILEFORMAT_OGG=0"),
+    });
+    const raylib_host_mod = raylib_host_dep.module("raylib");
+    const raylib_host_artifact = raylib_host_dep.artifact("raylib");
+    const core_host_mod = b.dependency("labelle-core", .{ .target = host_target, .optimize = optimize }).module("labelle-core");
+
     const audio_host_mod = b.createModule(.{
         .root_source_file = b.path("src/audio.zig"),
         .target = host_target,
         .optimize = optimize,
         .link_libc = true,
     });
-    audio_host_mod.addImport("raylib", raylib_mod);
+    audio_host_mod.addImport("raylib", raylib_host_mod);
     // Host test build resolves its own decode module instance against the host
     // target (mirrors slot_alloc_tests / the input host module pattern).
     audio_host_mod.addImport(
@@ -297,7 +315,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    gfx_host_mod.addImport("raylib", raylib_mod);
+    gfx_host_mod.addImport("raylib", raylib_host_mod);
     gfx_host_mod.addIncludePath(b.path("src"));
     gfx_host_mod.addCSourceFile(.{ .file = b.path("src/stb_truetype_impl.c"), .flags = &.{} });
 
@@ -311,8 +329,8 @@ pub fn build(b: *std.Build) void {
         .target = host_target,
         .optimize = optimize,
     });
-    input_host_mod.addImport("raylib", raylib_mod);
-    input_host_mod.addImport("labelle-core", core_mod);
+    input_host_mod.addImport("raylib", raylib_host_mod);
+    input_host_mod.addImport("labelle-core", core_host_mod);
     input_host_mod.addImport("build_options", input_opts.createModule());
     // The host's gamepad route can differ from the target's (e.g. cross-
     // compiling to Linux from macOS), so the host test module resolves its
@@ -323,10 +341,10 @@ pub fn build(b: *std.Build) void {
     if (host_uses_sdl) {
         const host_sdl_dep = b.dependency("labelle_sdl_gamepad", .{ .target = host_target, .optimize = optimize });
         const m = host_sdl_dep.module("sdl_gamepad");
-        m.addImport("labelle_core", core_mod);
+        m.addImport("labelle_core", core_host_mod);
         input_host_mod.addImport("sdl_gamepad", m);
     }
-    input_host_mod.linkLibrary(raylib_artifact);
+    input_host_mod.linkLibrary(raylib_host_artifact);
     // The host is a desktop target, so input.zig references the SDL externs
     // when the gamepad source is wired — link SDL2 (+ Homebrew lib path on
     // macOS) so the test binary resolves. Skipped entirely on opt-out and on
@@ -367,20 +385,20 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    window_host_mod.addImport("raylib", raylib_mod);
+    window_host_mod.addImport("raylib", raylib_host_mod);
     const contract_check_mod = b.createModule(.{
         .root_source_file = b.path("src/contract_check.zig"),
         .target = host_target,
         .optimize = optimize,
         .imports = &.{
-            .{ .name = "labelle_core", .module = core_mod },
+            .{ .name = "labelle_core", .module = core_host_mod },
             .{ .name = "window", .module = window_host_mod },
             .{ .name = "input", .module = input_host_mod },
             .{ .name = "gfx", .module = gfx_host_mod },
         },
     });
     const contract_check = b.addTest(.{ .root_module = contract_check_mod });
-    contract_check.root_module.linkLibrary(raylib_artifact);
+    contract_check.root_module.linkLibrary(raylib_host_artifact);
     test_step.dependOn(&b.addRunArtifact(contract_check).step);
 
     const test_host_step = b.step(
