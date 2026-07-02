@@ -1,0 +1,60 @@
+// Gamepad input demo — raylib desktop, with a Dear ImGui HUD.
+//
+// In-repo sibling of the plain `examples/raylib` demo: the gamepad example
+// now lives WITH its backend package instead of in the (backend-agnostic)
+// assembler (labelle-assembler#520). The generated build compiles the game
+// as a desktop binary, importing THIS repo's raylib gfx/window/input/audio
+// modules via the `backend_package` override below.
+//
+// Backend resolution: `.backend_package = .{ .repo = "local:../.." }` points
+// the raylib provider at THIS checkout (examples/gamepad → ../.. = repo root),
+// so the example exercises the repo's own backend source rather than a
+// published release. (`.backend = .raylib` is kept as the canonical spelling;
+// the explicit `backend_package` always wins via the assembler's
+// `effectiveBackendPackage`.)
+//
+// GUI plugin: the HUD is drawn with Dear ImGui via the `imgui` GUI plugin
+// (rlImGui raylib bridge). We use the assembler's BUNDLED plugin
+// (`labelle-assembler/plugins/imgui`) rather than the published
+// `labelle-imgui` package, because only the bundled copy pins the rlImGui
+// raylib bridge at a Zig-0.16-compatible raylib-zig (6.0.0 / f25c517). The
+// published package's raylib bridge still pins raylib-zig 5.6.0-dev, whose
+// build.zig uses `std.mem.trimLeft` / `std.process.getEnvVarOwned` — both
+// removed in Zig 0.16, so `raylib + published imgui` fails to build. (The
+// published package is fine for bgfx + imgui, e.g. flying-platform-labelle,
+// which is why that combination ships released.) The bundled plugin is
+// resolved via the sibling assembler checkout (`../../../labelle-assembler`),
+// the same sibling the `.assembler_version` / CI job already provide.
+//
+// Build: `labelle generate` then `cd .labelle/raylib_desktop && zig build`.
+.{
+    .name = "example_gamepad",
+    .title = "LaBelle - Gamepad Input Demo",
+    .width = 900,
+    .height = 640,
+    .target_fps = 60,
+    .backend = .raylib,
+    .backend_package = .{
+        .name = "raylib",
+        .repo = "local:../..",
+        .version = "0.3.0",
+    },
+    .y_axis = .up,
+    .ecs = .mock,
+    .initial_prefab = "main",
+    .states = .{"playing"},
+    // Dear ImGui GUI plugin (bundled assembler plugin, raylib bridge). Its
+    // `gui.labelle` declares the rlImGui raylib bridge, and the script HUD
+    // draws through the full cimgui API via `@import("gui_backend").ig`.
+    .gui = .{ .path = "../../../labelle-assembler/plugins/imgui" },
+    .layers = .{
+        .{ .name = "background", .order = 0, .space = .screen },
+        .{ .name = "world", .order = 1, .space = .world },
+        .{ .name = "ui", .order = 2, .space = .screen },
+    },
+    .core_version = "1.22.0",
+    .engine_version = "1.65.0",
+    .gfx_version = "1.19.0",
+    .labelle_version = "local:../../../labelle-cli",
+    .assembler_version = "local:../../../labelle-assembler",
+}

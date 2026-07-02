@@ -113,3 +113,89 @@ jobs:
           echo "building: $proj"
           cd "$(dirname "$proj")"
           zig build
+
+  # Integration: generate + build the gamepad desktop example — same shape as
+  # raylib-example above, but the example additionally exercises the `imgui`
+  # GUI plugin (rlImGui raylib bridge) for its HUD. The plugin is a separate
+  # published package pinned to a released version in the example's
+  # `project.labelle` (`.plugins` + `.gui = .{ .plugin = "imgui" }`) and
+  # fetched on demand during `labelle generate`; the backend is still THIS
+  # repo (backend_package local:../..). Linux-only for the same raylib-zig
+  # xcode-frameworks reason as the jobs above.
+  gamepad-example:
+    name: gamepad desktop example generate + build
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout labelle-raylib
+        uses: actions/checkout@v4
+        with:
+          path: labelle-raylib
+          persist-credentials: false
+
+      - name: Checkout labelle-assembler (main)
+        uses: actions/checkout@v4
+        with:
+          repository: labelle-toolkit/labelle-assembler
+          ref: main
+          path: labelle-assembler
+          persist-credentials: false
+
+      - name: Checkout labelle-cli (main)
+        uses: actions/checkout@v4
+        with:
+          repository: labelle-toolkit/labelle-cli
+          ref: main
+          path: labelle-cli
+          persist-credentials: false
+
+      - name: Checkout labelle-gui for the labelle-cli build
+        uses: actions/checkout@v4
+        with:
+          repository: labelle-toolkit/labelle-gui
+          ref: main
+          path: labelle-cli/zig-pkg/labelle-gui
+          persist-credentials: false
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Install raylib system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxinerama-dev libxi-dev libxext-dev libxfixes-dev \
+            libwayland-dev libxkbcommon-dev libasound2-dev libsdl2-dev
+
+      - name: Cache Zig artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/zig
+            labelle-raylib/examples/gamepad/.labelle
+          key: gamepad-example-${{ hashFiles('labelle-raylib/examples/gamepad/project.labelle', 'labelle-raylib/build.zig.zon') }}
+          restore-keys: |
+            gamepad-example-
+
+      - name: Build labelle-assembler
+        run: cd labelle-assembler && zig build
+
+      - name: Build labelle-cli
+        run: cd labelle-cli && zig build
+
+      - name: Generate + build the gamepad desktop example
+        env:
+          LABELLE_ASSEMBLER: ${{ github.workspace }}/labelle-assembler/zig-out/bin/labelle-assembler
+        run: |
+          set -euo pipefail
+          cd labelle-raylib/examples/gamepad
+          $GITHUB_WORKSPACE/labelle-cli/zig-out/bin/labelle generate
+          # The generated desktop project lands at .labelle/<backend>_desktop;
+          # find its build.zig robustly (excluding the copied deps/ trees).
+          proj=$(find .labelle -maxdepth 2 -name build.zig -not -path '*/deps/*' | head -1)
+          if [ -z "$proj" ]; then echo "generated build.zig not found"; exit 1; fi
+          echo "building: $proj"
+          cd "$(dirname "$proj")"
+          zig build
