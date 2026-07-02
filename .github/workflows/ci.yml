@@ -27,3 +27,89 @@ jobs:
             libwayland-dev libxkbcommon-dev libasound2-dev libsdl2-dev
       - name: Build + test
         run: zig build test
+
+  # Integration: generate + build the raylib desktop example (which now lives
+  # here, not in labelle-assembler — the agnosticism remainder of #520). Verifies
+  # the backend works end-to-end through the toolkit. The example pins released
+  # core/engine/gfx (fetched) + THIS repo as its backend (backend_package
+  # local:../..) + the assembler/cli as siblings (built from main so the example
+  # tracks unreleased toolchain fixes, mirroring labelle-bgfx's example job).
+  # Linux-only for the same reason as build-test (raylib-zig's git+https
+  # xcode-frameworks fetch fails on the macOS runner).
+  raylib-example:
+    name: raylib desktop example generate + build
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout labelle-raylib
+        uses: actions/checkout@v4
+        with:
+          path: labelle-raylib
+          persist-credentials: false
+
+      - name: Checkout labelle-assembler (main)
+        uses: actions/checkout@v4
+        with:
+          repository: labelle-toolkit/labelle-assembler
+          ref: main
+          path: labelle-assembler
+          persist-credentials: false
+
+      - name: Checkout labelle-cli (main)
+        uses: actions/checkout@v4
+        with:
+          repository: labelle-toolkit/labelle-cli
+          ref: main
+          path: labelle-cli
+          persist-credentials: false
+
+      - name: Checkout labelle-gui for the labelle-cli build
+        uses: actions/checkout@v4
+        with:
+          repository: labelle-toolkit/labelle-gui
+          ref: main
+          path: labelle-cli/zig-pkg/labelle-gui
+          persist-credentials: false
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Install raylib system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxinerama-dev libxi-dev libxext-dev libxfixes-dev \
+            libwayland-dev libxkbcommon-dev libasound2-dev libsdl2-dev
+
+      - name: Cache Zig artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/zig
+            labelle-raylib/examples/raylib/.labelle
+          key: raylib-example-${{ hashFiles('labelle-raylib/examples/raylib/project.labelle', 'labelle-raylib/build.zig.zon') }}
+          restore-keys: |
+            raylib-example-
+
+      - name: Build labelle-assembler
+        run: cd labelle-assembler && zig build
+
+      - name: Build labelle-cli
+        run: cd labelle-cli && zig build
+
+      - name: Generate + build the raylib desktop example
+        env:
+          LABELLE_ASSEMBLER: ${{ github.workspace }}/labelle-assembler/zig-out/bin/labelle-assembler
+        run: |
+          set -euo pipefail
+          cd labelle-raylib/examples/raylib
+          $GITHUB_WORKSPACE/labelle-cli/zig-out/bin/labelle generate
+          # The generated desktop project lands at .labelle/<backend>_desktop;
+          # find its build.zig robustly (excluding the copied deps/ trees).
+          proj=$(find .labelle -maxdepth 2 -name build.zig -not -path '*/deps/*' | head -1)
+          if [ -z "$proj" ]; then echo "generated build.zig not found"; exit 1; fi
+          echo "building: $proj"
+          cd "$(dirname "$proj")"
+          zig build

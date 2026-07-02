@@ -1,0 +1,45 @@
+// raylib backend, desktop platform. In-repo sibling of the other backend
+// examples (labelle-bgfx/examples/bgfx, labelle-wgpu/…): the raylib example
+// now lives WITH its backend package instead of in the (backend-agnostic)
+// assembler (labelle-assembler#520). The generated build compiles the game
+// as a desktop binary, importing THIS repo's raylib gfx/window/input/audio
+// modules via the `backend_package` override below.
+//
+// Backend resolution: `.backend_package = .{ .repo = "local:../.." }` points
+// the raylib provider at THIS checkout (examples/raylib → ../.. = repo root),
+// so the example exercises the repo's own backend source rather than a
+// published release — the whole point of hosting it here. (`.backend = .raylib`
+// is kept as the canonical spelling; the explicit `backend_package` always
+// wins via the assembler's `effectiveBackendPackage`.)
+//
+// Build: `labelle generate` then `cd .labelle/raylib_desktop && zig build`.
+.{
+    .name = "example_raylib",
+    .title = "LaBelle v2 — Runtime Scenes Demo",
+    .width = 800,
+    .height = 600,
+    .target_fps = 60,
+    .backend = .raylib,
+    .backend_package = .{
+        .name = "raylib",
+        .repo = "local:../..",
+        .version = "0.3.0",
+    },
+    .y_axis = .up,
+    .ecs = .zig_ecs,
+    .initial_prefab = "main",
+    .states = .{ "menu", "playing", "paused" },
+    .resources = .{
+        .{ .name = "sprites", .json = "assets/sprites.json", .texture = "assets/sprites.png" },
+    },
+    .layers = .{
+        .{ .name = "background", .order = 0, .space = .screen },
+        .{ .name = "world", .order = 1, .space = .world },
+        .{ .name = "ui", .order = 2, .space = .screen },
+    },
+    .core_version = "1.22.0",
+    .engine_version = "1.65.0",
+    .gfx_version = "1.19.0",
+    .labelle_version = "local:../../../labelle-cli",
+    .assembler_version = "local:../../../labelle-assembler",
+}
