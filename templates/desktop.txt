@@ -38,7 +38,7 @@ const target_fps: u32 = {{fps}};
     var screenshot_req: ?engine.ScreenshotRequest = engine.requestedScreenshot();
     const loop_start_ns: i128 = engine.nowNs();
 
-    while (!window.windowShouldClose()) {
+    while (!window.shouldQuit()) {
         // Pump the shared SDL desktop gamepad source once per frame: drains
         // hotplug events and refreshes the button-edge snapshot. No-op off
         // desktop (raylib's own gamepad state is pumped inside GLFW's poll).
@@ -62,22 +62,22 @@ const target_fps: u32 = {{fps}};
         // Frame-rate-independent sim: derive dt from real frame time so render
         // FPS can't drive game speed. Cap at 4 frames to prevent physics
         // explosions after a stall/backgrounding. Mirrors wasm.txt's use of
-        // getFrameTime() — see Flying-Platform/flying-platform-labelle#504.
+        // frameDuration() — see Flying-Platform/flying-platform-labelle#504.
         // @max(target_fps, 1) guards against a target_fps=0 (unlimited/vsync-only) config dividing by zero.
-        const dt: f32 = @min(window.getFrameTime(), 4.0 / @as(f32, @floatFromInt(@max(target_fps, 1))));
+        const dt: f32 = @min(@as(f32, @floatCast(window.frameDuration())), 4.0 / @as(f32, @floatFromInt(@max(target_fps, 1))));
 {{preview_heartbeat}}{{tick_code}}        g.tick(dt);
 
-        window.beginDrawing();
+        window.beginFrame();
         window.clearBackground(30, 30, 35, 255);
         g.render();
         g.renderGizmos();
 {{gui_draw_code}}        window.drawText(screen_title, 10, 10, 20, 180, 180, 180, 255);
-{{preview_readback}}        window.endDrawing();
+{{preview_readback}}        window.endFrame();
 
         // Fire the screenshot exactly once, after the configured
         // delay. `takeScreenshot` reads the just-presented framebuffer,
-        // so it MUST run after `endDrawing` (raylib swaps in
-        // `endDrawing`). The `req = null` assignment after the call
+        // so it MUST run after `endFrame` (raylib swaps in
+        // `endFrame`). The `req = null` assignment after the call
         // ensures one-shot semantics even if the loop iterates again.
         if (screenshot_req) |req| {
             const now_ns: i128 = engine.nowNs();

@@ -350,6 +350,39 @@ pub fn build(b: *std.Build) void {
     const gfx_compile_check = b.addTest(.{ .root_module = gfx_host_mod });
     const input_compile_check = b.addTest(.{ .root_module = input_host_mod });
 
+    // ── labelle-core contract conformance self-check (#502) ─────────
+    // Test-only module that imports labelle-core and compile-proves this backend
+    // satisfies assertWindow/assertInput/assertBackend — the same gates the
+    // assembler emits into every generated main.zig. The shipped src/window.zig
+    // deliberately does NOT import labelle-core, so the module graph consumed by
+    // generated games stays untouched. Pinned to host_target (like slot_alloc_tests)
+    // so it always builds native even under `-Dtarget=…`, and RUNS the behavioral
+    // runWindowSuite: it rides the DEFAULT `test` step (raylib's only CI step),
+    // linking raylib's C artifact + (on non-Linux desktop hosts) SDL2 via the
+    // reused host input module. The suite queries the window with no live window,
+    // which raylib's accessors tolerate (return 0 / no-op).
+    const window_host_mod = b.createModule(.{
+        .root_source_file = b.path("src/window.zig"),
+        .target = host_target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    window_host_mod.addImport("raylib", raylib_mod);
+    const contract_check_mod = b.createModule(.{
+        .root_source_file = b.path("src/contract_check.zig"),
+        .target = host_target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "labelle_core", .module = core_mod },
+            .{ .name = "window", .module = window_host_mod },
+            .{ .name = "input", .module = input_host_mod },
+            .{ .name = "gfx", .module = gfx_host_mod },
+        },
+    });
+    const contract_check = b.addTest(.{ .root_module = contract_check_mod });
+    contract_check.root_module.linkLibrary(raylib_artifact);
+    test_step.dependOn(&b.addRunArtifact(contract_check).step);
+
     const test_host_step = b.step(
         "test-host",
         "Run Phase 4 decoder unit tests natively (needs raylib's system libs).",
