@@ -66,7 +66,10 @@ fn axis(game: anytype, id: u32, a: Axis) f32 {
 
 /// One labelled button cell, coloured by its current pressed state.
 fn buttonCell(game: anytype, id: u32, b: Btn, comptime text: [*:0]const u8) void {
-    ig.igTextColored(if (down(game, id, b)) ACTIVE else IDLE, text);
+    // `igTextColored`'s text arg is a printf FORMAT string; pass the label
+    // through `%s` so a stray `%` in it is never interpreted as a directive
+    // (the labels are comptime literals today, but this is the safe idiom).
+    ig.igTextColored(if (down(game, id, b)) ACTIVE else IDLE, "%s", text);
 }
 
 pub fn drawGui(game: anytype) void {

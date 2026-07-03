@@ -18,8 +18,11 @@ pub fn tick(game: anytype, dt: f32) void {
         var dy: f32 = 0;
         if (game.isKeyDown(.right)) dx += 1;
         if (game.isKeyDown(.left)) dx -= 1;
-        if (game.isKeyDown(.down)) dy += 1;
-        if (game.isKeyDown(.up)) dy -= 1;
+        // This example declares `.y_axis = .up`, so +y is up in world space
+        // (`pos.y += dy`). Up must therefore ADD to dy and Down subtract, or the
+        // arrow keys drive vertical movement inverted.
+        if (game.isKeyDown(.up)) dy += 1;
+        if (game.isKeyDown(.down)) dy -= 1;
 
         const mag = std.math.sqrt(dx * dx + dy * dy);
         if (mag > 0) {
