@@ -148,11 +148,11 @@ fn drawPad(game: anytype, id: u32) void {
     // a regression in it fails this example's build/CI, not just its behavior.
     const face_edge = pressed(game, id, .right_face_down) or pressed(game, id, .right_face_right) or
         pressed(game, id, .right_face_left) or pressed(game, id, .right_face_up);
-    ig.igTextColored(
-        if (face_edge) ACTIVE else IDLE,
-        "%s",
-        if (face_edge) "Edge: face button just pressed!" else "Edge: (press a face button)",
-    );
+    // Explicit `[*:0]const u8`: a ternary of two different-length string literals
+    // otherwise infers `[:0]const u8` (a slice), which has no C ABI and can't pass
+    // to the variadic `igTextColored`.
+    const edge_msg: [*:0]const u8 = if (face_edge) "Edge: face button just pressed!" else "Edge: (press a face button)";
+    ig.igTextColored(if (face_edge) ACTIVE else IDLE, "%s", edge_msg);
 
     // ── D-pad (left cluster) ────────────────────────────────────────────
     ig.igTextUnformatted("DPad:");
