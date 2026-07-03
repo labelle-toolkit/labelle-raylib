@@ -60,6 +60,13 @@ fn down(game: anytype, id: u32, b: Btn) bool {
     return game.isGamepadButtonDown(id, @enumFromInt(@intFromEnum(b)));
 }
 
+/// One-frame press EDGE (`isGamepadButtonPressed`) — true only on the frame the
+/// button transitions down, unlike the held `down` above. Kept distinct so the
+/// HUD exercises both forwarders.
+fn pressed(game: anytype, id: u32, b: Btn) bool {
+    return game.isGamepadButtonPressed(id, @enumFromInt(@intFromEnum(b)));
+}
+
 fn axis(game: anytype, id: u32, a: Axis) f32 {
     return game.getGamepadAxisValue(id, @enumFromInt(@intFromEnum(a)));
 }
@@ -134,6 +141,18 @@ fn drawPad(game: anytype, id: u32) void {
     buttonCell(game, id, .right_face_left, "[X]");
     ig.igSameLine();
     buttonCell(game, id, .right_face_up, "[Y]");
+
+    // Press-EDGE readout: `isGamepadButtonPressed` fires for a single frame on
+    // the down-transition, unlike the held `isGamepadButtonDown` cells above.
+    // Flashes green on the press frame. Exercising the edge forwarder here means
+    // a regression in it fails this example's build/CI, not just its behavior.
+    const face_edge = pressed(game, id, .right_face_down) or pressed(game, id, .right_face_right) or
+        pressed(game, id, .right_face_left) or pressed(game, id, .right_face_up);
+    // Explicit `[*:0]const u8`: a ternary of two different-length string literals
+    // otherwise infers `[:0]const u8` (a slice), which has no C ABI and can't pass
+    // to the variadic `igTextColored`.
+    const edge_msg: [*:0]const u8 = if (face_edge) "Edge: face button just pressed!" else "Edge: (press a face button)";
+    ig.igTextColored(if (face_edge) ACTIVE else IDLE, "%s", edge_msg);
 
     // ── D-pad (left cluster) ────────────────────────────────────────────
     ig.igTextUnformatted("DPad:");

@@ -40,7 +40,7 @@ Or the raw recipe the CI uses:
 ```sh
 labelle generate
 cd .labelle/raylib_desktop && zig build
-./zig-out/bin/game
+./zig-out/bin/example_gamepad
 ```
 
 ## Notes

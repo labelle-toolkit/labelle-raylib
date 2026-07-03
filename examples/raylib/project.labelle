@@ -27,7 +27,11 @@
     },
     .y_axis = .up,
     .ecs = .zig_ecs,
-    .initial_prefab = "main",
+    // Start in the `menu` scene (the first `.states` entry is `menu`): its
+    // script waits for Enter, then setState("playing") + queueSceneChange("main").
+    // Loading `main` as the initial prefab skipped the menu entirely and made
+    // Enter just reload the already-active scene.
+    .initial_prefab = "menu",
     .states = .{ "menu", "playing", "paused" },
     .resources = .{
         .{ .name = "sprites", .json = "assets/sprites.json", .texture = "assets/sprites.png" },
