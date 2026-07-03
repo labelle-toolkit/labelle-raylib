@@ -116,12 +116,13 @@ jobs:
 
   # Integration: generate + build the gamepad desktop example — same shape as
   # raylib-example above, but the example additionally exercises the `imgui`
-  # GUI plugin (rlImGui raylib bridge) for its HUD. The plugin is a separate
-  # published package pinned to a released version in the example's
-  # `project.labelle` (`.plugins` + `.gui = .{ .plugin = "imgui" }`) and
-  # fetched on demand during `labelle generate`; the backend is still THIS
-  # repo (backend_package local:../..). Linux-only for the same raylib-zig
-  # xcode-frameworks reason as the jobs above.
+  # GUI plugin (rlImGui raylib bridge) for its HUD. The plugin is the
+  # assembler's BUNDLED imgui plugin (path-pinned to
+  # `labelle-assembler/plugins/imgui`), NOT the published `labelle-imgui`
+  # package: only the bundled copy pins the rlImGui raylib bridge against a
+  # raylib-zig that builds on Zig 0.16 (labelle-imgui#25). The backend is
+  # still THIS repo (backend_package local:../..). Linux-only for the same
+  # raylib-zig xcode-frameworks reason as the jobs above.
   gamepad-example:
     name: gamepad desktop example generate + build
     if: ${{ github.event_name == 'pull_request' }}
