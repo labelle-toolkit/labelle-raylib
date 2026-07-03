@@ -16,7 +16,11 @@ const NAME_CAP: usize = 64;
 
 const Entry = struct {
     known: bool = false,
-    name: [NAME_CAP]u8 = [_]u8{0} ** NAME_CAP,
+    // NAME_CAP name bytes + 1 reserved for the sentinel NUL, so `name[name_len]`
+    // (name_len ≤ NAME_CAP) is always in bounds for the `[:0]` slice in `nameFor`.
+    // A plain [NAME_CAP]u8 panicked (safe) / was UB (ReleaseFast) on a device
+    // name that exactly filled it — the sentinel read `name[NAME_CAP]` off the end.
+    name: [NAME_CAP + 1]u8 = [_]u8{0} ** (NAME_CAP + 1),
     name_len: usize = 0,
     type_hint: [:0]const u8 = "unknown",
 };
@@ -30,6 +34,7 @@ pub fn record(id: u32, name: []const u8, type_hint: [:0]const u8) void {
     e.known = true;
     const n = @min(name.len, NAME_CAP);
     @memcpy(e.name[0..n], name[0..n]);
+    e.name[n] = 0; // sentinel NUL — always in bounds (buffer is NAME_CAP + 1)
     e.name_len = n;
     e.type_hint = type_hint;
 }
@@ -48,10 +53,8 @@ pub fn nameFor(id: u32) [:0]const u8 {
     if (id >= MAX_GAMEPADS) return "Gamepad";
     const e = &entries[id];
     if (!e.known or e.name_len == 0) return "Gamepad";
-    // The buffer is fixed and NUL-padded, so it is already NUL-terminated
-    // after `name_len` bytes (NAME_CAP >= name_len + 1 unless name filled
-    // the whole buffer; guard that edge by forcing a terminator).
-    if (e.name_len < NAME_CAP) e.name[e.name_len] = 0;
+    // `record` wrote the sentinel NUL at `name[name_len]`, and the buffer
+    // reserves room for it (NAME_CAP + 1), so this slice never reads off the end.
     return e.name[0..e.name_len :0];
 }
 
