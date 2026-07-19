@@ -12,8 +12,8 @@
         // v1.22.0 (ecosystem-hardening #453) adds the `*_CONTRACT_VERSION`
         // consts the backend's `targets_*_contract` decls are matched against.
         .@"labelle-core" = .{
-            .url = "https://github.com/labelle-toolkit/labelle-core/archive/refs/tags/v1.22.0.tar.gz",
-            .hash = "labelle_core-1.22.0-OauRcMkFBgCFj-reWQnyVqtZBYsfbSFQkHY971oQduWl",
+            .url = "https://github.com/labelle-toolkit/labelle-core/archive/refs/tags/v1.26.0.tar.gz",
+            .hash = "labelle_core-1.26.0-OauRcDwJBwDfNc5x2S_FBwPrTztNUb_8Ie4HSq8XUoAM",
         },
         // Shared windowless-SDL desktop gamepad source (core#28). In-tree
         // sub-package consumed by BOTH the raylib and sokol desktop backends

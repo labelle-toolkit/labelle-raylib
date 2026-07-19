@@ -1,6 +1,7 @@
 //! Compile-proof that this backend satisfies labelle-core's contracts
 //! (labelle-assembler#502). Mirrors the check the assembler emits into every
 //! generated main.zig (assembler src/codegen/blocks/imports.zig).
+const std = @import("std");
 const core = @import("labelle_core");
 const window = @import("window");
 const input = @import("input");
@@ -42,4 +43,31 @@ comptime {
 
 test "behavioral window conformance" {
     try core.conformance.runWindowSuite(window);
+}
+
+// ── Material seam surface pin (labelle-gfx#305 v1 acceptance) ──────────────
+// raylib intentionally declares NO material decls (`drawTextureProMaterial` /
+// `materialSupported`), so every `Material` sprite degrades to a plain,
+// rlgl-batched draw at COMPTIME via labelle-core's `@hasDecl` gate (the
+// wrapper bodies are already type-proven by `forceMethods(core.Backend(gfx))`
+// above). labelle-gfx's engine-level degrade test for exactly this surface
+// shape lives in its test/material_batch_cost.zig ("raylib-shaped backend");
+// this pin keeps the two sides in sync: if raylib ever grows material decls,
+// fail HERE so the gfx-side degrade expectations and the #305 cross-backend
+// golden harness are updated deliberately (raylib would then need its own
+// golden capture + pin in labelle-gfx's material-cross-check).
+comptime {
+    if (core.backend_contract.materialCapabilities(gfx).effects.len != 0)
+        @compileError("labelle-raylib now advertises material effects — update labelle-gfx's degrade tests + cross-backend golden pins (labelle-gfx#305) before landing this");
+}
+
+test "material seam: no effect advertised, wrapper degrade gate closed" {
+    // Compile/comptime-level proof only: actually DRAWING needs a window,
+    // which headless CI cannot open — the runtime degrade behaviour for this
+    // exact no-decl surface is exercised in labelle-gfx's suite instead.
+    const B = core.Backend(gfx);
+    try std.testing.expect(!B.materialSupported(.flash));
+    try std.testing.expect(!B.materialSupported(.palette_swap));
+    try std.testing.expect(!B.materialSupported(.dissolve));
+    try std.testing.expect(!B.materialSupported(.outline));
 }
