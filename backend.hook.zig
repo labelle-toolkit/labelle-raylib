@@ -35,6 +35,7 @@
 //! assembler imports the hook into the generated root package.
 
 const std = @import("std");
+const builtin = @import("builtin");
 
 /// Versioned with `manifest_v2.HOOK_ABI_VERSION`; the assembler asserts
 /// compatibility before calling. Bumps only on a breaking ctx/ABI change.
@@ -103,9 +104,45 @@ pub const EmLinkOptions = struct {
     emsdk: *std.Build.Dependency,
 };
 
-/// Path to an emscripten tool (e.g. `emcc`) inside the resolved emsdk dependency.
+/// An external managed emsdk tool, when EMSDK points at a complete installation.
+/// The dependency remains the fallback so builds without a managed SDK preserve
+/// the existing lazy graph behavior.
+const EmToolResolution = union(enum) {
+    managed: []const u8,
+    dep,
+};
+
+/// Pure decision behind `emTool`: prefer an external EMSDK only when the
+/// requested tool exists in the managed emsdk layout. Unset, empty, and
+/// incomplete environments all retain the dependency fallback.
+fn emToolPath(
+    allocator: std.mem.Allocator,
+    env_emsdk: ?[]const u8,
+    tool: []const u8,
+    fs: anytype,
+) EmToolResolution {
+    const root = env_emsdk orelse return .dep;
+    if (root.len == 0) return .dep;
+    const abs = std.fs.path.join(allocator, &.{ root, "upstream", "emscripten", tool }) catch return .dep;
+    if (fs.exists(abs)) return .{ .managed = abs };
+    allocator.free(abs);
+    return .dep;
+}
+
+/// Path to an emscripten tool (e.g. `emcc`). Prefer a complete externally
+/// managed emsdk, then fall back to the resolved emsdk dependency.
 fn emTool(b: *std.Build, emsdk: *std.Build.Dependency, tool: []const u8) std.Build.LazyPath {
-    return emsdk.path(b.fmt("upstream/emscripten/{s}", .{tool}));
+    const BuildFs = struct {
+        b: *std.Build,
+        fn exists(self: @This(), path: []const u8) bool {
+            return if (std.Io.Dir.cwd().access(self.b.graph.io, path, .{})) |_| true else |_| false;
+        }
+    };
+    const actual_tool = if (builtin.os.tag == .windows) b.fmt("{s}.bat", .{tool}) else tool;
+    switch (emToolPath(b.allocator, b.graph.environ_map.get("EMSDK"), actual_tool, BuildFs{ .b = b })) {
+        .managed => |path| return .{ .cwd_relative = path },
+        .dep => return emsdk.path(b.fmt("upstream/emscripten/{s}", .{actual_tool})),
+    }
 }
 
 /// Reconstruction of raylib-zig's emcc link step using only `std.Build` + the
@@ -222,4 +259,38 @@ test "wasm emcc args reproduce the enum .link_raylib_wasm settings" {
     try testing.expectEqualStrings("-sALLOW_MEMORY_GROWTH=1", wasm_allow_memory_growth_arg);
     try testing.expectEqualStrings("-sUSE_GLFW=3", wasm_use_glfw_arg);
     try testing.expectEqualStrings("-sASYNCIFY", wasm_asyncify_arg);
+}
+
+const EmToolFixtureFs = struct {
+    expected: []const u8,
+
+    fn exists(self: @This(), path: []const u8) bool {
+        return std.mem.eql(u8, path, self.expected);
+    }
+};
+
+test "external EMSDK tool takes precedence when its managed file exists" {
+    const allocator = testing.allocator;
+    const expected = try std.fs.path.join(allocator, &.{ "/managed/emsdk", "upstream", "emscripten", "emcc" });
+    defer allocator.free(expected);
+
+    const result = emToolPath(allocator, "/managed/emsdk", "emcc", EmToolFixtureFs{ .expected = expected });
+    switch (result) {
+        .managed => |path| {
+            defer allocator.free(path);
+            try testing.expectEqualStrings(expected, path);
+        },
+        .dep => return error.ManagedToolWasNotSelected,
+    }
+}
+
+test "unset, empty, and missing EMSDK tools use the dependency fallback" {
+    const allocator = testing.allocator;
+    const expected = try std.fs.path.join(allocator, &.{ "/managed/emsdk", "upstream", "emscripten", "emcc" });
+    defer allocator.free(expected);
+    const fs = EmToolFixtureFs{ .expected = expected };
+
+    try testing.expect(emToolPath(allocator, null, "emcc", fs) == .dep);
+    try testing.expect(emToolPath(allocator, "", "emcc", fs) == .dep);
+    try testing.expect(emToolPath(allocator, "/other/emsdk", "emcc", fs) == .dep);
 }
