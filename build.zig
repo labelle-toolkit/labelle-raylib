@@ -261,17 +261,10 @@ pub fn build(b: *std.Build) void {
 
     // ── Phase 4 host-native test runs ────────────────────────────────
     //
-    // The Phase 4 decoder unit tests (decodeFont rejecting empty /
-    // garbage input, decodeAudio dispatching on file_type, Sound
-    // layout invariants) are pure-CPU and exercise no raylib API,
-    // but the test binary itself imports `gfx.zig`/`audio.zig`,
-    // which transitively pulls in raylib-zig + its C artifact. That
-    // C link depends on host-side frameworks (Foundation, IOKit,
-    // …) that the default `test` step shouldn't require — wiring
-    // these off a separate `test-host` step keeps the default
-    // cross-compile flow linker-free, matching sokol's split
-    // (sokol's `test` works without a linker because sokol's C lib
-    // has no host-framework dep; raylib's does, so we segregate).
+    // Decoder and input assertions run in the default `test` step used by CI.
+    // They need host-native system libraries, just like the default window
+    // contract suite below. Pin their modules to host_target so a requested
+    // cross-target still executes these pure-CPU assertions natively.
     //
     // Both test modules are forced to `host_target` so that
     // `zig build -Dtarget=wasm32-emscripten test-host` still builds
@@ -319,11 +312,9 @@ pub fn build(b: *std.Build) void {
     gfx_host_mod.addIncludePath(b.path("src"));
     gfx_host_mod.addCSourceFile(.{ .file = b.path("src/stb_truetype_impl.c"), .flags = &.{} });
 
-    // input.zig imports `raylib` (poll/describe gamepad helpers call into
-    // rl.isGamepadAvailable) and `labelle-core` (GamepadEvent contract), so
-    // its test binary links raylib's C artifact + host frameworks — same
-    // reason it rides the host-native `test-host` step, not the linker-free
-    // default `test` step.
+    // input.zig imports raylib + labelle-core, so its host-native test binary
+    // links raylib's C artifact and the host frameworks. Both `test` and the
+    // narrower `test-host` entry point execute these assertions.
     const input_host_mod = b.createModule(.{
         .root_source_file = b.path("src/input.zig"),
         .target = host_target,
@@ -403,10 +394,22 @@ pub fn build(b: *std.Build) void {
 
     const test_host_step = b.step(
         "test-host",
-        "Run Phase 4 decoder unit tests natively (needs raylib's system libs).",
+        "Run decoder and input unit tests natively (needs raylib's system libs).",
     );
     test_host_step.dependOn(&b.addRunArtifact(audio_compile_check).step);
     test_host_step.dependOn(&b.addRunArtifact(gfx_compile_check).step);
     test_host_step.dependOn(&b.addRunArtifact(input_compile_check).step);
     test_host_step.dependOn(&b.addRunArtifact(slot_alloc_tests).step);
+    test_step.dependOn(test_host_step);
+
+    // The build hook is a standalone std-only module; generating examples
+    // typechecks its API but does not discover or execute its own assertions.
+    const hook_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("backend.hook.zig"),
+            .target = host_target,
+            .optimize = optimize,
+        }),
+    });
+    test_step.dependOn(&b.addRunArtifact(hook_tests).step);
 }
