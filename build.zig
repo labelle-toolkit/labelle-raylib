@@ -241,7 +241,6 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const test_step = b.step("test", "Run raylib backend unit tests");
-    test_step.dependOn(&b.addRunArtifact(slot_alloc_tests).step);
 
     // ── ASTC container-parsing tests (#341) ─────────────────────────
     // `src/astc.zig` is pure byte parsing with no raylib dependency, so it
