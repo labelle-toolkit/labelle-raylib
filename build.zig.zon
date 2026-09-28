@@ -49,6 +49,8 @@
         "backend.manifest.zon",
         "backend.manifest.v2.zon",
         "backend.hook.zig",
+        // Imported by build.zig: SDL2 link + missing-SDL2 message (cli#471 S2).
+        "sdl2_link.zig",
         "build_fragments",
         "templates",
         "src",
