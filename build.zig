@@ -1,5 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
+// SDL2 link + the one-line "SDL2 not found" failure (labelle-cli#471 S2).
+const sdl2_link = @import("sdl2_link.zig");
 
 /// True when `t` is a native desktop OS (matches the shared source's comptime
 /// `is_desktop`): only there are the SDL `extern`s referenced and SDL must be
@@ -187,12 +189,9 @@ pub fn build(b: *std.Build) void {
         // (`windows-gnu`) toolchain, so honor `LABELLE_SDL2_LIB` — the dir
         // holding the import lib (`libSDL2.dll.a`) from the SDL2 MinGW devel
         // package. `SDL2.dll` must be on PATH (or beside the exe) at runtime.
-        if (target.result.os.tag == .windows and builtin.target.os.tag == .windows) {
-            if (b.graph.environ_map.get("LABELLE_SDL2_LIB")) |p| {
-                input_mod.addLibraryPath(.{ .cwd_relative = p });
-            }
-        }
-        input_mod.linkSystemLibrary("SDL2", .{});
+        // When SDL2 is missing there, the build fails with one line
+        // (`sdl2_link.missing_message`) instead of a linker error.
+        sdl2_link.link(b, input_mod, .{ .honor_env = target.result.os.tag == .windows and builtin.target.os.tag == .windows });
     } else if (gamepad_enabled and targetUsesCoreGamepad(target.result)) {
         // Linux core route: no SDL, but core's udev source dlopens libudev at
         // runtime via std.DynLib, which needs real dlopen — link libc.
@@ -344,12 +343,7 @@ pub fn build(b: *std.Build) void {
         if (sdlLibPath(host_target.result.os.tag, builtin.target.os.tag)) |p| {
             input_host_mod.addLibraryPath(.{ .cwd_relative = p });
         }
-        if (host_target.result.os.tag == .windows and builtin.target.os.tag == .windows) {
-            if (b.graph.environ_map.get("LABELLE_SDL2_LIB")) |p| {
-                input_host_mod.addLibraryPath(.{ .cwd_relative = p });
-            }
-        }
-        input_host_mod.linkSystemLibrary("SDL2", .{});
+        sdl2_link.link(b, input_host_mod, .{ .honor_env = host_target.result.os.tag == .windows and builtin.target.os.tag == .windows });
     } else if (gamepad_enabled and targetUsesCoreGamepad(host_target.result)) {
         input_host_mod.link_libc = true;
     }
@@ -411,4 +405,19 @@ pub fn build(b: *std.Build) void {
         }),
     });
     test_step.dependOn(&b.addRunArtifact(hook_tests).step);
+
+    // SDL2 resolution + the one-line missing-SDL2 message (cli#471 S2);
+    // `sdl2-link-check` drives the real wiring (CI forces the missing case).
+    const sdl2_link_tests = b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path("sdl2_link.zig"),
+        .target = host_target,
+        .optimize = optimize,
+    }) });
+    test_step.dependOn(&b.addRunArtifact(sdl2_link_tests).step);
+    sdl2_link.addCheckStep(
+        b,
+        target,
+        gamepad_enabled and targetIsDesktop(target.result) and !targetUsesCoreGamepad(target.result),
+        .{ .honor_env = target.result.os.tag == .windows and builtin.target.os.tag == .windows },
+    );
 }
